@@ -14,6 +14,20 @@ from pathlib import Path
 p = Path("app/src/main/assets/index.html")
 html = p.read_text(encoding="utf-8")
 
+# V47: mevcut APK'den çıkan HTML içindeki eski alarm UI'yi de yamala.
+# Not: recovered HTML içinde __nativeStatusAndAlarmSyncV37 zaten olduğu için sadece native_script'i değiştirmek yetmez.
+_alarm_patches = [
+    ('if (![0,5,10,15,30].includes(merged.preMinutes)) merged.preMinutes = 10;', 'if (!Number.isFinite(merged.preMinutes) || merged.preMinutes < 0) merged.preMinutes = 10;\n      merged.preMinutes = Math.max(0, Math.min(180, Math.round(merged.preMinutes)));'),
+    ('\'<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option></select></div>\' +', '\'<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option><option value="custom">Özel dakika</option></select><input id="alarmPreCustomV47" class="offset-input" type="number" min="0" max="180" step="1" inputmode="numeric" placeholder="dk" style="width:92px;display:none"></div></div>\' +'),
+    ('var pre = document.getElementById("alarmPreV30");\n    var mode = document.getElementById("alarmModeV30");\n    var style = document.getElementById("alarmStyleV30");\n    if (pre) pre.value = String(s.preMinutes);\n    if (mode) mode.value = s.mode;\n    if (style) style.value = s.style;', 'var pre = document.getElementById("alarmPreV30");\n    var preCustom = document.getElementById("alarmPreCustomV47");\n    var mode = document.getElementById("alarmModeV30");\n    var style = document.getElementById("alarmStyleV30");\n\n    function clampPre(v) {\n      var n = Number(v || 0);\n      if (!Number.isFinite(n) || n < 0) n = 0;\n      return Math.max(0, Math.min(180, Math.round(n)));\n    }\n\n    function isFixedPre(v) {\n      return [0,5,10,15,30].includes(Number(v));\n    }\n\n    function syncCustomPreBox() {\n      if (!preCustom) return;\n      var custom = pre && pre.value === "custom";\n      preCustom.style.display = custom ? "" : "none";\n      if (custom && !preCustom.value) preCustom.value = String(clampPre(s.preMinutes || 10));\n    }\n\n    if (pre) pre.value = isFixedPre(s.preMinutes) ? String(s.preMinutes) : "custom";\n    if (preCustom) preCustom.value = String(clampPre(s.preMinutes));\n    syncCustomPreBox();\n    if (mode) mode.value = s.mode;\n    if (style) style.value = s.style;'),
+    ('if (pre) ns.preMinutes = Number(pre.value || 0);\n      if (mode) ns.mode = String(mode.value || "vibrate");\n      if (style) ns.style = String(style.value || "detailed");', 'if (pre) {\n        ns.preMinutes = pre.value === "custom" ? clampPre(preCustom ? preCustom.value : 10) : clampPre(pre.value);\n      }\n      if (mode) ns.mode = String(mode.value || "vibrate");\n      if (style) ns.style = String(style.value || "detailed");'),
+    ('if (pre) pre.onchange = changed;\n    if (mode) mode.onchange = changed;\n    if (style) style.onchange = changed;', 'if (pre) pre.onchange = function(){ syncCustomPreBox(); changed(); };\n    if (preCustom) {\n      preCustom.oninput = changed;\n      preCustom.onchange = changed;\n    }\n    if (mode) mode.onchange = changed;\n    if (style) style.onchange = changed;'),
+]
+for _old, _new in _alarm_patches:
+    if _old in html:
+        html = html.replace(_old, _new, 1)
+
+
 native_script = r'''
 <script>
 (function () {
@@ -154,7 +168,7 @@ native_script = r'''
         '<label class="switch-row"><span><b>İkindi</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="ikindi" type="checkbox"></label>' +
         '<label class="switch-row"><span><b>Akşam</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="aksam" type="checkbox"></label>' +
         '<label class="switch-row"><span><b>Yatsı</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="yatsi" type="checkbox"></label>' +
-        '<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option><option value="custom">Özel dakika</option></select><input id="alarmPreCustomV46" class="offset-input" type="number" min="0" max="180" step="1" inputmode="numeric" placeholder="dk" style="width:92px;display:none"></div></div>' +
+        '<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option><option value="custom">Özel dakika</option></select><input id="alarmPreCustomV47" class="offset-input" type="number" min="0" max="180" step="1" inputmode="numeric" placeholder="dk" style="width:92px;display:none"></div></div>' +
         '<div class="row"><div><b>Bildirim türü</b><small>Alarm kanalını belirler</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Titreşimli</option><option value="sound">Sesli + titreşimli</option></select></div>' +
         '<div class="row"><div><b>Bildirim metni</b><small>Alarm üslubu</small></div><select id="alarmStyleV30" class="offset-input"><option value="simple">Basit</option><option value="detailed">Detaylı</option><option value="manevi">Manevi</option></select></div>' +
         '<div class="row"><div><b>Alarm test bildirimi</b><small>Seçili tür ve metinle hemen test eder</small></div><button id="testAlarmV30" class="primary ghost">Test et</button></div>' +
@@ -174,7 +188,7 @@ native_script = r'''
       if (cb) cb.checked = !!s.enabled[k];
     });
     var pre = document.getElementById("alarmPreV30");
-    var preCustom = document.getElementById("alarmPreCustomV46");
+    var preCustom = document.getElementById("alarmPreCustomV47");
     var mode = document.getElementById("alarmModeV30");
     var style = document.getElementById("alarmStyleV30");
 
@@ -1213,8 +1227,8 @@ android {
         applicationId 'com.turkhunmete.namazvakti'
         minSdk 23
         targetSdk 35
-        versionCode 46
-        versionName '1.0.46-custom-reminder'
+        versionCode 47
+        versionName '1.0.47-custom-reminder-fix'
     }
 }
 EOF
