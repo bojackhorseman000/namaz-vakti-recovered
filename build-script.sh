@@ -1185,8 +1185,8 @@ android {
         applicationId 'com.turkhunmete.namazvakti'
         minSdk 23
         targetSdk 35
-        versionCode 44
-        versionName '1.0.44-recovered'
+        versionCode 45
+        versionName '1.0.45-recovered-fix'
     }
 }
 EOF
@@ -2289,8 +2289,7 @@ public class StatusService extends Service {
     }
 
     private String compactText(String text) {
-        String clean = TextFix.normalize(text).replace("
-", " ").replace("  ", " ").trim();
+        String clean = TextFix.normalize(text).replace("\\n", " ").replace("  ", " ").trim();
         if (clean.length() <= 58) return clean;
         return clean.substring(0, 55).trim() + "...";
     }
