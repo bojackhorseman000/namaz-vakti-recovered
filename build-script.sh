@@ -23,6 +23,13 @@ _alarm_patches = [
     ('if (pre) ns.preMinutes = Number(pre.value || 0);\n      if (mode) ns.mode = String(mode.value || "vibrate");\n      if (style) ns.style = String(style.value || "detailed");', 'if (pre) {\n        ns.preMinutes = pre.value === "custom" ? clampPre(preCustom ? preCustom.value : 10) : clampPre(pre.value);\n      }\n      if (mode) ns.mode = String(mode.value || "vibrate");\n      if (style) ns.style = String(style.value || "detailed");'),
     ('if (pre) pre.onchange = changed;\n    if (mode) mode.onchange = changed;\n    if (style) style.onchange = changed;', 'if (pre) pre.onchange = function(){ syncCustomPreBox(); changed(); };\n    if (preCustom) {\n      preCustom.oninput = changed;\n      preCustom.onchange = changed;\n    }\n    if (mode) mode.onchange = changed;\n    if (style) style.onchange = changed;'),
 ]
+
+# V48: recovered HTML içindeki alarm planlama/test parçalarını da güncelle.
+_alarm_patches.extend([
+    ('function pushNativeAlarms(force) {\n    try {\n      if (typeof window.AndroidNotify === "undefined") return;\n      if (typeof window.AndroidNotify.scheduleAlarms !== "function") return;\n      var payload = buildAlarmPayload();', 'function pushNativeAlarms(force) {\n    try {\n      if (typeof window.AndroidNotify === "undefined") return;\n      if (typeof window.AndroidNotify.requestPermission === "function") {\n        try { window.AndroidNotify.requestPermission(); } catch(e) {}\n      }\n      if (typeof window.AndroidNotify.scheduleAlarms !== "function") return;\n      var payload = buildAlarmPayload();'),
+    ('\'<div class="row"><div><b>Alarm test bildirimi</b><small>Seçili tür ve metinle hemen test eder</small></div><button id="testAlarmV30" class="primary ghost">Test et</button></div>\' +', '\'<div class="row"><div><b>Alarm test bildirimi</b><small>Hemen bildirim ve planlı alarm testi</small></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="testAlarmV30" class="primary ghost">Test et</button><button id="testScheduledAlarmV48" class="primary ghost">2 dk sonra test</button></div></div>\' +'),
+    ('if (test) test.onclick = function(){\n      var ns = loadAlarmSettings();\n      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes});\n      try {\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n        if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);\n        else if (window.AndroidNotify && typeof window.AndroidNotify.show === "function") window.AndroidNotify.show("Öğle vakti", JSON.stringify({body:"Kayseri • Öğle vakti girdi. Saat: 12:37"}));\n        var st = document.getElementById("alarmStatusV30");\n        if (st) st.textContent = "Test bildirimi gönderildi.";\n      } catch (e) {\n        var st2 = document.getElementById("alarmStatusV30");\n        if (st2) st2.textContent = "Test hatası: " + e.message;\n      }\n    };\n  }', 'if (test) test.onclick = function(){\n      var ns = loadAlarmSettings();\n      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes});\n      try {\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n        if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);\n        else if (window.AndroidNotify && typeof window.AndroidNotify.show === "function") window.AndroidNotify.show("Öğle vakti", JSON.stringify({body:"Kayseri • Öğle vakti girdi. Saat: 12:37"}));\n        var st = document.getElementById("alarmStatusV30");\n        if (st) st.textContent = "Test bildirimi gönderildi.";\n      } catch (e) {\n        var st2 = document.getElementById("alarmStatusV30");\n        if (st2) st2.textContent = "Test hatası: " + e.message;\n      }\n    };\n\n    var planned = document.getElementById("testScheduledAlarmV48");\n    if (planned) planned.onclick = function(){\n      try {\n        var ns = loadAlarmSettings();\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n\n        var d = new Date(Date.now() + 2 * 60 * 1000);\n        var y = d.getFullYear();\n        var m = String(d.getMonth() + 1).padStart(2, "0");\n        var day = String(d.getDate()).padStart(2, "0");\n        var hh = String(d.getHours()).padStart(2, "0");\n        var mm = String(d.getMinutes()).padStart(2, "0");\n        var iso = y + "-" + m + "-" + day;\n        var time = hh + ":" + mm;\n\n        var payload = {\n          city: "Kayseri",\n          preMinutes: 0,\n          mode: ns.mode,\n          style: ns.style,\n          prayers: [{date: iso, key: "test", label: "Test", time: time}]\n        };\n\n        if (window.AndroidNotify && typeof window.AndroidNotify.scheduleAlarms === "function") {\n          window.AndroidNotify.scheduleAlarms(JSON.stringify(payload));\n        }\n        var st3 = document.getElementById("alarmStatusV30");\n        if (st3) st3.textContent = "Planlı test kuruldu: yaklaşık 2 dakika sonra bildirim gelmeli.";\n      } catch(e) {\n        var st4 = document.getElementById("alarmStatusV30");\n        if (st4) st4.textContent = "Planlı test hatası: " + e.message;\n      }\n    };\n  }'),
+])
 for _old, _new in _alarm_patches:
     if _old in html:
         html = html.replace(_old, _new, 1)
@@ -171,7 +178,7 @@ native_script = r'''
         '<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option><option value="custom">Özel dakika</option></select><input id="alarmPreCustomV47" class="offset-input" type="number" min="0" max="180" step="1" inputmode="numeric" placeholder="dk" style="width:92px;display:none"></div></div>' +
         '<div class="row"><div><b>Bildirim türü</b><small>Alarm kanalını belirler</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Titreşimli</option><option value="sound">Sesli + titreşimli</option></select></div>' +
         '<div class="row"><div><b>Bildirim metni</b><small>Alarm üslubu</small></div><select id="alarmStyleV30" class="offset-input"><option value="simple">Basit</option><option value="detailed">Detaylı</option><option value="manevi">Manevi</option></select></div>' +
-        '<div class="row"><div><b>Alarm test bildirimi</b><small>Seçili tür ve metinle hemen test eder</small></div><button id="testAlarmV30" class="primary ghost">Test et</button></div>' +
+        '<div class="row"><div><b>Alarm test bildirimi</b><small>Hemen bildirim ve planlı alarm testi</small></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="testAlarmV30" class="primary ghost">Test et</button><button id="testScheduledAlarmV48" class="primary ghost">2 dk sonra test</button></div></div>' +
         '<pre id="alarmStatusV30" class="status">Alarm ayarları hazır.</pre>';
       var reminder = document.getElementById("reminderSettings");
       if (reminder && reminder.parentNode === tab) tab.insertBefore(card, reminder);
@@ -259,6 +266,40 @@ native_script = r'''
         if (st2) st2.textContent = "Test hatası: " + e.message;
       }
     };
+
+    var planned = document.getElementById("testScheduledAlarmV48");
+    if (planned) planned.onclick = function(){
+      try {
+        var ns = loadAlarmSettings();
+        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();
+
+        var d = new Date(Date.now() + 2 * 60 * 1000);
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, "0");
+        var day = String(d.getDate()).padStart(2, "0");
+        var hh = String(d.getHours()).padStart(2, "0");
+        var mm = String(d.getMinutes()).padStart(2, "0");
+        var iso = y + "-" + m + "-" + day;
+        var time = hh + ":" + mm;
+
+        var payload = {
+          city: "Kayseri",
+          preMinutes: 0,
+          mode: ns.mode,
+          style: ns.style,
+          prayers: [{date: iso, key: "test", label: "Test", time: time}]
+        };
+
+        if (window.AndroidNotify && typeof window.AndroidNotify.scheduleAlarms === "function") {
+          window.AndroidNotify.scheduleAlarms(JSON.stringify(payload));
+        }
+        var st3 = document.getElementById("alarmStatusV30");
+        if (st3) st3.textContent = "Planlı test kuruldu: yaklaşık 2 dakika sonra bildirim gelmeli.";
+      } catch(e) {
+        var st4 = document.getElementById("alarmStatusV30");
+        if (st4) st4.textContent = "Planlı test hatası: " + e.message;
+      }
+    };
   }
 
   function makeTimesLines(rec) {
@@ -325,6 +366,9 @@ native_script = r'''
   function pushNativeAlarms(force) {
     try {
       if (typeof window.AndroidNotify === "undefined") return;
+      if (typeof window.AndroidNotify.requestPermission === "function") {
+        try { window.AndroidNotify.requestPermission(); } catch(e) {}
+      }
       if (typeof window.AndroidNotify.scheduleAlarms !== "function") return;
       var payload = buildAlarmPayload();
       var raw = JSON.stringify(payload);
@@ -1227,8 +1271,8 @@ android {
         applicationId 'com.turkhunmete.namazvakti'
         minSdk 23
         targetSdk 35
-        versionCode 47
-        versionName '1.0.47-custom-reminder-fix'
+        versionCode 48
+        versionName '1.0.48-alarm-reliability'
     }
 }
 EOF
@@ -1290,6 +1334,7 @@ cat > app/src/main/AndroidManifest.xml <<'EOF'
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:theme="@style/AppTheme"
@@ -2110,7 +2155,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String permissionState() { return hasNotificationPermission() ? "granted" : "default"; }
         @JavascriptInterface public String requestPermission() { runOnUiThread(new Runnable() { @Override public void run() { requestNotificationPermissionOnly(); }}); return hasNotificationPermission() ? "granted" : "default"; }
         @JavascriptInterface public void show(final String title, final String optionsJson) { runOnUiThread(new Runnable() { @Override public void run() { showNativeNotification(title, optionsJson); }}); }
-        @JavascriptInterface public void scheduleAlarms(final String payloadJson) { runOnUiThread(new Runnable() { @Override public void run() { AlarmScheduler.configure(MainActivity.this, payloadJson); }}); }
+        @JavascriptInterface public void scheduleAlarms(final String payloadJson) { runOnUiThread(new Runnable() { @Override public void run() { requestNotificationPermissionOnly(); AlarmScheduler.configure(MainActivity.this, payloadJson); }}); }
         @JavascriptInterface public void testAlarm(final String payloadJson) { runOnUiThread(new Runnable() { @Override public void run() { AlarmScheduler.showTest(MainActivity.this, payloadJson); }}); }
         @JavascriptInterface public void saveFile(final String filename, final String content) { runOnUiThread(new Runnable() { @Override public void run() { saveExportFile(filename, content); }}); }
         @JavascriptInterface public void openBackupImport() { runOnUiThread(new Runnable() { @Override public void run() { openNativeFilePicker(IMPORT_BACKUP_REQUEST, "Yedek dosyası seç"); }}); }
@@ -2379,4 +2424,3 @@ public class StatusService extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
 }
 EOF
-
