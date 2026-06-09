@@ -102,7 +102,8 @@ native_script = r'''
       if (typeof data.preMinutes !== "undefined") merged.preMinutes = Number(data.preMinutes);
       if (data.mode) merged.mode = String(data.mode);
       if (data.style) merged.style = String(data.style);
-      if (![0,5,10,15,30].includes(merged.preMinutes)) merged.preMinutes = 10;
+      if (!Number.isFinite(merged.preMinutes) || merged.preMinutes < 0) merged.preMinutes = 10;
+      merged.preMinutes = Math.max(0, Math.min(180, Math.round(merged.preMinutes)));
       if (!["silent","vibrate","sound"].includes(merged.mode)) merged.mode = "vibrate";
       if (!["simple","detailed","manevi"].includes(merged.style)) merged.style = "detailed";
       return merged;
@@ -153,7 +154,7 @@ native_script = r'''
         '<label class="switch-row"><span><b>İkindi</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="ikindi" type="checkbox"></label>' +
         '<label class="switch-row"><span><b>Akşam</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="aksam" type="checkbox"></label>' +
         '<label class="switch-row"><span><b>Yatsı</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="yatsi" type="checkbox"></label>' +
-        '<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option></select></div>' +
+        '<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option><option value="custom">Özel dakika</option></select><input id="alarmPreCustomV46" class="offset-input" type="number" min="0" max="180" step="1" inputmode="numeric" placeholder="dk" style="width:92px;display:none"></div></div>' +
         '<div class="row"><div><b>Bildirim türü</b><small>Alarm kanalını belirler</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Titreşimli</option><option value="sound">Sesli + titreşimli</option></select></div>' +
         '<div class="row"><div><b>Bildirim metni</b><small>Alarm üslubu</small></div><select id="alarmStyleV30" class="offset-input"><option value="simple">Basit</option><option value="detailed">Detaylı</option><option value="manevi">Manevi</option></select></div>' +
         '<div class="row"><div><b>Alarm test bildirimi</b><small>Seçili tür ve metinle hemen test eder</small></div><button id="testAlarmV30" class="primary ghost">Test et</button></div>' +
@@ -173,9 +174,30 @@ native_script = r'''
       if (cb) cb.checked = !!s.enabled[k];
     });
     var pre = document.getElementById("alarmPreV30");
+    var preCustom = document.getElementById("alarmPreCustomV46");
     var mode = document.getElementById("alarmModeV30");
     var style = document.getElementById("alarmStyleV30");
-    if (pre) pre.value = String(s.preMinutes);
+
+    function clampPre(v) {
+      var n = Number(v || 0);
+      if (!Number.isFinite(n) || n < 0) n = 0;
+      return Math.max(0, Math.min(180, Math.round(n)));
+    }
+
+    function isFixedPre(v) {
+      return [0,5,10,15,30].includes(Number(v));
+    }
+
+    function syncCustomPreBox() {
+      if (!preCustom) return;
+      var custom = pre && pre.value === "custom";
+      preCustom.style.display = custom ? "" : "none";
+      if (custom && !preCustom.value) preCustom.value = String(clampPre(s.preMinutes || 10));
+    }
+
+    if (pre) pre.value = isFixedPre(s.preMinutes) ? String(s.preMinutes) : "custom";
+    if (preCustom) preCustom.value = String(clampPre(s.preMinutes));
+    syncCustomPreBox();
     if (mode) mode.value = s.mode;
     if (style) style.value = s.style;
 
@@ -185,7 +207,9 @@ native_script = r'''
         var cb = document.querySelector('[data-alarm-key="'+k+'"]');
         if (cb) ns.enabled[k] = !!cb.checked;
       });
-      if (pre) ns.preMinutes = Number(pre.value || 0);
+      if (pre) {
+        ns.preMinutes = pre.value === "custom" ? clampPre(preCustom ? preCustom.value : 10) : clampPre(pre.value);
+      }
       if (mode) ns.mode = String(mode.value || "vibrate");
       if (style) ns.style = String(style.value || "detailed");
       saveAlarmSettings(ns);
@@ -198,7 +222,11 @@ native_script = r'''
       var cb = document.querySelector('[data-alarm-key="'+k+'"]');
       if (cb) cb.onchange = changed;
     });
-    if (pre) pre.onchange = changed;
+    if (pre) pre.onchange = function(){ syncCustomPreBox(); changed(); };
+    if (preCustom) {
+      preCustom.oninput = changed;
+      preCustom.onchange = changed;
+    }
     if (mode) mode.onchange = changed;
     if (style) style.onchange = changed;
 
@@ -1185,8 +1213,8 @@ android {
         applicationId 'com.turkhunmete.namazvakti'
         minSdk 23
         targetSdk 35
-        versionCode 45
-        versionName '1.0.45-recovered-fix'
+        versionCode 46
+        versionName '1.0.46-custom-reminder'
     }
 }
 EOF
@@ -2337,3 +2365,4 @@ public class StatusService extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
 }
 EOF
+
