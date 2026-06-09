@@ -1,0 +1,68 @@
+name: Build APK - Recovered Stable Base
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Find HTML file
+        run: |
+          echo "Repository files:"
+          ls -la
+          if [ -f "namaz_v43_recovered.html" ]; then
+            HTML_FILE="namaz_v43_recovered.html"
+          elif [ -f "namaz_v21_standalone.html" ]; then
+            HTML_FILE="namaz_v21_standalone.html"
+          else
+            HTML_FILE="$(find . -maxdepth 1 -type f -name '*.html' | sort | head -n 1 | sed 's#^./##')"
+          fi
+          echo "Using HTML file: $HTML_FILE"
+          test -f "$HTML_FILE"
+          echo "HTML_FILE=$HTML_FILE" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle
+        run: |
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
+          unzip -q gradle.zip
+          echo "$PWD/gradle-8.10.2/bin" >> "$GITHUB_PATH"
+
+      - name: Generate Android project
+        run: |
+          chmod +x build-script.sh
+          ./build-script.sh
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Prepare final APK
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-debug.apk release/Namaz-Vakti-recovered-v44.apk
+          ls -lh release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: namaz-vakti-recovered-v44-apk
+          path: release/Namaz-Vakti-recovered-v44.apk
+
