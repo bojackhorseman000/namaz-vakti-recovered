@@ -1271,8 +1271,8 @@ android {
         applicationId 'com.turkhunmete.namazvakti'
         minSdk 23
         targetSdk 35
-        versionCode 48
-        versionName '1.0.48-alarm-reliability'
+        versionCode 49
+        versionName '1.0.49-live-countdown-fix'
     }
 }
 EOF
@@ -1417,7 +1417,7 @@ public class Watchdog {
         PendingIntent pendingIntent = PendingIntent.getBroadcast(context, REQUEST_CODE, intent, flags);
         AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarmManager == null) return;
-        long triggerAt = SystemClock.elapsedRealtime() + 90000;
+        long triggerAt = SystemClock.elapsedRealtime() + 45000;
         try {
             if (Build.VERSION.SDK_INT >= 23) alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
             else alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
@@ -2042,6 +2042,7 @@ public class MainActivity extends Activity {
     private void updateStatusPayload(String payloadJson) {
         Intent serviceIntent = new Intent(this, StatusService.class);
         serviceIntent.putExtra("statusData", payloadJson == null ? "" : payloadJson);
+        serviceIntent.putExtra("restoreOnly", true);
         try {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent);
             else startService(serviceIntent);
@@ -2053,13 +2054,18 @@ public class MainActivity extends Activity {
         if (!hasNotificationPermission()) { requestNotificationPermissionOnly(); return; }
         String body = "";
         boolean silent = false, hasTag = false, status = false;
+        String statusPayload = "";
         try {
             JSONObject options = new JSONObject(optionsJson == null ? "{}" : optionsJson);
             body = options.optString("body", "");
             silent = options.optBoolean("silent", false);
             hasTag = options.has("tag");
             status = options.optBoolean("status", false);
+            statusPayload = options.optString("statusData", "");
         } catch (Exception ignored) {}
+        if (statusPayload != null && statusPayload.trim().length() > 0) {
+            updateStatusPayload(statusPayload);
+        }
         String finalTitle = TextFix.normalize(title);
         if (finalTitle.length() == 0) finalTitle = "Namaz Vakti";
         body = TextFix.normalize(body);
@@ -2155,6 +2161,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String permissionState() { return hasNotificationPermission() ? "granted" : "default"; }
         @JavascriptInterface public String requestPermission() { runOnUiThread(new Runnable() { @Override public void run() { requestNotificationPermissionOnly(); }}); return hasNotificationPermission() ? "granted" : "default"; }
         @JavascriptInterface public void show(final String title, final String optionsJson) { runOnUiThread(new Runnable() { @Override public void run() { showNativeNotification(title, optionsJson); }}); }
+        @JavascriptInterface public void updateStatusData(final String payloadJson) { runOnUiThread(new Runnable() { @Override public void run() { updateStatusPayload(payloadJson); }}); }
         @JavascriptInterface public void scheduleAlarms(final String payloadJson) { runOnUiThread(new Runnable() { @Override public void run() { requestNotificationPermissionOnly(); AlarmScheduler.configure(MainActivity.this, payloadJson); }}); }
         @JavascriptInterface public void testAlarm(final String payloadJson) { runOnUiThread(new Runnable() { @Override public void run() { AlarmScheduler.showTest(MainActivity.this, payloadJson); }}); }
         @JavascriptInterface public void saveFile(final String filename, final String content) { runOnUiThread(new Runnable() { @Override public void run() { saveExportFile(filename, content); }}); }
@@ -2323,7 +2330,7 @@ public class StatusService extends Service {
         ticker = new Runnable() { @Override public void run() {
             try { showForegroundNotification(); } catch (Exception ignored) {}
             Watchdog.schedule(StatusService.this);
-            if (handler != null) handler.postDelayed(this, 60000);
+            if (handler != null) handler.postDelayed(this, 30000);
         }};
     }
 
@@ -2358,7 +2365,7 @@ public class StatusService extends Service {
         Watchdog.schedule(this);
         if (handler != null && ticker != null) {
             handler.removeCallbacks(ticker);
-            handler.postDelayed(ticker, 60000);
+            handler.postDelayed(ticker, 30000);
         }
         return START_STICKY;
     }
@@ -2424,3 +2431,4 @@ public class StatusService extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
 }
 EOF
+
