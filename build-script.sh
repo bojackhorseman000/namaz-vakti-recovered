@@ -5,8 +5,31 @@ mkdir -p app/src/main/java/com/turkhunmete/namazvakti
 mkdir -p app/src/main/assets
 mkdir -p app/src/main/res/drawable
 mkdir -p app/src/main/res/values
+mkdir -p app/src/main/res/raw
 
 cp "$HTML_FILE" app/src/main/assets/index.html
+
+
+python3 <<'PYBIP'
+import math, wave, struct
+sample_rate = 44100
+duration = 0.18
+freq = 880.0
+volume = 0.55
+frames = int(sample_rate * duration)
+with wave.open("app/src/main/res/raw/namaz_bip.wav", "w") as w:
+    w.setnchannels(1)
+    w.setsampwidth(2)
+    w.setframerate(sample_rate)
+    for i in range(frames):
+        fade = 1.0
+        if i < int(sample_rate * 0.012):
+            fade = i / max(1, int(sample_rate * 0.012))
+        if i > frames - int(sample_rate * 0.025):
+            fade = max(0.0, (frames - i) / max(1, int(sample_rate * 0.025)))
+        val = int(32767 * volume * fade * math.sin(2 * math.pi * freq * i / sample_rate))
+        w.writeframes(struct.pack("<h", val))
+PYBIP
 
 python3 <<'PY'
 from pathlib import Path
@@ -28,7 +51,22 @@ _alarm_patches = [
 _alarm_patches.extend([
     ('function pushNativeAlarms(force) {\n    try {\n      if (typeof window.AndroidNotify === "undefined") return;\n      if (typeof window.AndroidNotify.scheduleAlarms !== "function") return;\n      var payload = buildAlarmPayload();', 'function pushNativeAlarms(force) {\n    try {\n      if (typeof window.AndroidNotify === "undefined") return;\n      if (typeof window.AndroidNotify.requestPermission === "function") {\n        try { window.AndroidNotify.requestPermission(); } catch(e) {}\n      }\n      if (typeof window.AndroidNotify.scheduleAlarms !== "function") return;\n      var payload = buildAlarmPayload();'),
     ('\'<div class="row"><div><b>Alarm test bildirimi</b><small>Seçili tür ve metinle hemen test eder</small></div><button id="testAlarmV30" class="primary ghost">Test et</button></div>\' +', '\'<div class="row"><div><b>Alarm test bildirimi</b><small>Hemen bildirim ve planlı alarm testi</small></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="testAlarmV30" class="primary ghost">Test et</button><button id="testScheduledAlarmV48" class="primary ghost">2 dk sonra test</button></div></div>\' +'),
-    ('if (test) test.onclick = function(){\n      var ns = loadAlarmSettings();\n      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes});\n      try {\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n        if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);\n        else if (window.AndroidNotify && typeof window.AndroidNotify.show === "function") window.AndroidNotify.show("Öğle vakti", JSON.stringify({body:"Kayseri • Öğle vakti girdi. Saat: 12:37"}));\n        var st = document.getElementById("alarmStatusV30");\n        if (st) st.textContent = "Test bildirimi gönderildi.";\n      } catch (e) {\n        var st2 = document.getElementById("alarmStatusV30");\n        if (st2) st2.textContent = "Test hatası: " + e.message;\n      }\n    };\n  }', 'if (test) test.onclick = function(){\n      var ns = loadAlarmSettings();\n      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes});\n      try {\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n        if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);\n        else if (window.AndroidNotify && typeof window.AndroidNotify.show === "function") window.AndroidNotify.show("Öğle vakti", JSON.stringify({body:"Kayseri • Öğle vakti girdi. Saat: 12:37"}));\n        var st = document.getElementById("alarmStatusV30");\n        if (st) st.textContent = "Test bildirimi gönderildi.";\n      } catch (e) {\n        var st2 = document.getElementById("alarmStatusV30");\n        if (st2) st2.textContent = "Test hatası: " + e.message;\n      }\n    };\n\n    var planned = document.getElementById("testScheduledAlarmV48");\n    if (planned) planned.onclick = function(){\n      try {\n        var ns = loadAlarmSettings();\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n\n        var d = new Date(Date.now() + 2 * 60 * 1000);\n        var y = d.getFullYear();\n        var m = String(d.getMonth() + 1).padStart(2, "0");\n        var day = String(d.getDate()).padStart(2, "0");\n        var hh = String(d.getHours()).padStart(2, "0");\n        var mm = String(d.getMinutes()).padStart(2, "0");\n        var iso = y + "-" + m + "-" + day;\n        var time = hh + ":" + mm;\n\n        var payload = {\n          city: "Kayseri",\n          preMinutes: 0,\n          mode: ns.mode,\n          style: ns.style,\n          prayers: [{date: iso, key: "test", label: "Test", time: time}]\n        };\n\n        if (window.AndroidNotify && typeof window.AndroidNotify.scheduleAlarms === "function") {\n          window.AndroidNotify.scheduleAlarms(JSON.stringify(payload));\n        }\n        var st3 = document.getElementById("alarmStatusV30");\n        if (st3) st3.textContent = "Planlı test kuruldu: yaklaşık 2 dakika sonra bildirim gelmeli.";\n      } catch(e) {\n        var st4 = document.getElementById("alarmStatusV30");\n        if (st4) st4.textContent = "Planlı test hatası: " + e.message;\n      }\n    };\n  }'),
+    ('if (test) test.onclick = function(){\n      var ns = loadAlarmSettings();\n      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes, sound:ns.sound||"bip", vibration:ns.vibration||"double"});\n      try {\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n        if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);\n        else if (window.AndroidNotify && typeof window.AndroidNotify.show === "function") window.AndroidNotify.show("Öğle vakti", JSON.stringify({body:"Kayseri • Öğle vakti girdi. Saat: 12:37"}));\n        var st = document.getElementById("alarmStatusV30");\n        if (st) st.textContent = "Test bildirimi gönderildi.";\n      } catch (e) {\n        var st2 = document.getElementById("alarmStatusV30");\n        if (st2) st2.textContent = "Test hatası: " + e.message;\n      }\n    };\n  }', 'if (test) test.onclick = function(){\n      var ns = loadAlarmSettings();\n      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes, sound:ns.sound||"bip", vibration:ns.vibration||"double"});\n      try {\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n        if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);\n        else if (window.AndroidNotify && typeof window.AndroidNotify.show === "function") window.AndroidNotify.show("Öğle vakti", JSON.stringify({body:"Kayseri • Öğle vakti girdi. Saat: 12:37"}));\n        var st = document.getElementById("alarmStatusV30");\n        if (st) st.textContent = "Test bildirimi gönderildi.";\n      } catch (e) {\n        var st2 = document.getElementById("alarmStatusV30");\n        if (st2) st2.textContent = "Test hatası: " + e.message;\n      }\n    };\n\n    var planned = document.getElementById("testScheduledAlarmV48");\n    if (planned) planned.onclick = function(){\n      try {\n        var ns = loadAlarmSettings();\n        if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();\n\n        var d = new Date(Date.now() + 2 * 60 * 1000);\n        var y = d.getFullYear();\n        var m = String(d.getMonth() + 1).padStart(2, "0");\n        var day = String(d.getDate()).padStart(2, "0");\n        var hh = String(d.getHours()).padStart(2, "0");\n        var mm = String(d.getMinutes()).padStart(2, "0");\n        var iso = y + "-" + m + "-" + day;\n        var time = hh + ":" + mm;\n\n        var payload = {\n          city: "Kayseri",\n          preMinutes: 0,\n          mode: ns.mode,\n          style: ns.style,\n          prayers: [{date: iso, key: "test", label: "Test", time: time}]\n        };\n\n        if (window.AndroidNotify && typeof window.AndroidNotify.scheduleAlarms === "function") {\n          window.AndroidNotify.scheduleAlarms(JSON.stringify(payload));\n        }\n        var st3 = document.getElementById("alarmStatusV30");\n        if (st3) st3.textContent = "Planlı test kuruldu: yaklaşık 2 dakika sonra bildirim gelmeli.";\n      } catch(e) {\n        var st4 = document.getElementById("alarmStatusV30");\n        if (st4) st4.textContent = "Planlı test hatası: " + e.message;\n      }\n    };\n  }'),
+])
+
+# V50: bildirim sesi ve titreşim özelleştirme yamaları.
+_alarm_patches.extend([
+    ('mode: "vibrate",\n    style: "detailed"', 'mode: "vibrate",\n    style: "detailed",\n    sound: "bip",\n    vibration: "double"'),
+    ('if (data.style) merged.style = String(data.style);', 'if (data.style) merged.style = String(data.style);\n      if (typeof data.sound !== "undefined") merged.sound = String(data.sound);\n      if (typeof data.vibration !== "undefined") merged.vibration = String(data.vibration);'),
+    ('if (!["simple","detailed","manevi"].includes(merged.style)) merged.style = "detailed";', 'if (!["simple","detailed","manevi"].includes(merged.style)) merged.style = "detailed";\n      if (!["bip","default","none"].includes(merged.sound)) merged.sound = "bip";\n      if (!["off","short","double","long"].includes(merged.vibration)) merged.vibration = "double";'),
+    ('\'<div class="row"><div><b>Bildirim türü</b><small>Alarm kanalını belirler</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Titreşimli</option><option value="sound">Sesli + titreşimli</option></select></div>\' +', '\'<div class="row"><div><b>Bildirim türü</b><small>Genel alarm davranışı</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Sadece titreşim</option><option value="sound">Sesli</option></select></div>\' +\n        \'<div class="row"><div><b>Bildirim sesi</b><small>Sesli modda kullanılacak ses</small></div><select id="alarmSoundV50" class="offset-input"><option value="bip">Kısa bip</option><option value="default">Telefon varsayılanı</option><option value="none">Ses yok</option></select></div>\' +\n        \'<div class="row"><div><b>Titreşim</b><small>Titreşim desenini belirler</small></div><select id="alarmVibrationV50" class="offset-input"><option value="off">Kapalı</option><option value="short">Kısa</option><option value="double">Çift</option><option value="long">Uzun</option></select></div>\' +'),
+    ('var mode = document.getElementById("alarmModeV30");\n    var style = document.getElementById("alarmStyleV30");', 'var mode = document.getElementById("alarmModeV30");\n    var sound = document.getElementById("alarmSoundV50");\n    var vibration = document.getElementById("alarmVibrationV50");\n    var style = document.getElementById("alarmStyleV30");'),
+    ('if (mode) mode.value = s.mode;\n    if (style) style.value = s.style;', 'if (mode) mode.value = s.mode;\n    if (sound) sound.value = s.sound || "bip";\n    if (vibration) vibration.value = s.vibration || "double";\n    if (style) style.value = s.style;'),
+    ('if (mode) ns.mode = String(mode.value || "vibrate");\n      if (style) ns.style = String(style.value || "detailed");', 'if (mode) ns.mode = String(mode.value || "vibrate");\n      if (sound) ns.sound = String(sound.value || "bip");\n      if (vibration) ns.vibration = String(vibration.value || "double");\n      if (style) ns.style = String(style.value || "detailed");'),
+    ('if (mode) mode.onchange = changed;\n    if (style) style.onchange = changed;', 'if (mode) mode.onchange = changed;\n    if (sound) sound.onchange = changed;\n    if (vibration) vibration.onchange = changed;\n    if (style) style.onchange = changed;'),
+    ('var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes});', 'var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes, sound:ns.sound||"bip", vibration:ns.vibration||"double"});'),
+    ('mode: ns.mode,\n          style: ns.style,\n          prayers: [{date: iso, key: "test", label: "Test", time: time}]', 'mode: ns.mode,\n          style: ns.style,\n          sound: ns.sound || "bip",\n          vibration: ns.vibration || "double",\n          prayers: [{date: iso, key: "test", label: "Test", time: time}]'),
+    ('return { city: "Kayseri", preMinutes: settings.preMinutes, mode: settings.mode, style: settings.style, prayers: prayers };', 'return { city: "Kayseri", preMinutes: settings.preMinutes, mode: settings.mode, style: settings.style, sound: settings.sound || "bip", vibration: settings.vibration || "double", prayers: prayers };'),
 ])
 for _old, _new in _alarm_patches:
     if _old in html:
@@ -46,7 +84,9 @@ native_script = r'''
     enabled: { sabah: true, ogle: true, ikindi: true, aksam: true, yatsi: true },
     preMinutes: 10,
     mode: "vibrate",
-    style: "detailed"
+    style: "detailed",
+    sound: "bip",
+    vibration: "double"
   };
 
   function txt(id) {
@@ -123,10 +163,14 @@ native_script = r'''
       if (typeof data.preMinutes !== "undefined") merged.preMinutes = Number(data.preMinutes);
       if (data.mode) merged.mode = String(data.mode);
       if (data.style) merged.style = String(data.style);
+      if (typeof data.sound !== "undefined") merged.sound = String(data.sound);
+      if (typeof data.vibration !== "undefined") merged.vibration = String(data.vibration);
       if (!Number.isFinite(merged.preMinutes) || merged.preMinutes < 0) merged.preMinutes = 10;
       merged.preMinutes = Math.max(0, Math.min(180, Math.round(merged.preMinutes)));
       if (!["silent","vibrate","sound"].includes(merged.mode)) merged.mode = "vibrate";
       if (!["simple","detailed","manevi"].includes(merged.style)) merged.style = "detailed";
+      if (!["bip","default","none"].includes(merged.sound)) merged.sound = "bip";
+      if (!["off","short","double","long"].includes(merged.vibration)) merged.vibration = "double";
       return merged;
     } catch (e) {
       return JSON.parse(JSON.stringify(DEFAULT_ALARMS));
@@ -176,7 +220,9 @@ native_script = r'''
         '<label class="switch-row"><span><b>Akşam</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="aksam" type="checkbox"></label>' +
         '<label class="switch-row"><span><b>Yatsı</b><small>Alarm açık/kapalı</small></span><input data-alarm-key="yatsi" type="checkbox"></label>' +
         '<div class="row"><div><b>Ön hatırlatma</b><small>Vakit girmeden önce uyarı</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><select id="alarmPreV30" class="offset-input"><option value="0">Kapalı</option><option value="5">5 dk önce</option><option value="10">10 dk önce</option><option value="15">15 dk önce</option><option value="30">30 dk önce</option><option value="custom">Özel dakika</option></select><input id="alarmPreCustomV47" class="offset-input" type="number" min="0" max="180" step="1" inputmode="numeric" placeholder="dk" style="width:92px;display:none"></div></div>' +
-        '<div class="row"><div><b>Bildirim türü</b><small>Alarm kanalını belirler</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Titreşimli</option><option value="sound">Sesli + titreşimli</option></select></div>' +
+        '<div class="row"><div><b>Bildirim türü</b><small>Genel alarm davranışı</small></div><select id="alarmModeV30" class="offset-input"><option value="silent">Sessiz</option><option value="vibrate">Sadece titreşim</option><option value="sound">Sesli</option></select></div>' +
+        '<div class="row"><div><b>Bildirim sesi</b><small>Sesli modda kullanılacak ses</small></div><select id="alarmSoundV50" class="offset-input"><option value="bip">Kısa bip</option><option value="default">Telefon varsayılanı</option><option value="none">Ses yok</option></select></div>' +
+        '<div class="row"><div><b>Titreşim</b><small>Titreşim desenini belirler</small></div><select id="alarmVibrationV50" class="offset-input"><option value="off">Kapalı</option><option value="short">Kısa</option><option value="double">Çift</option><option value="long">Uzun</option></select></div>' +
         '<div class="row"><div><b>Bildirim metni</b><small>Alarm üslubu</small></div><select id="alarmStyleV30" class="offset-input"><option value="simple">Basit</option><option value="detailed">Detaylı</option><option value="manevi">Manevi</option></select></div>' +
         '<div class="row"><div><b>Alarm test bildirimi</b><small>Hemen bildirim ve planlı alarm testi</small></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="testAlarmV30" class="primary ghost">Test et</button><button id="testScheduledAlarmV48" class="primary ghost">2 dk sonra test</button></div></div>' +
         '<pre id="alarmStatusV30" class="status">Alarm ayarları hazır.</pre>';
@@ -197,6 +243,8 @@ native_script = r'''
     var pre = document.getElementById("alarmPreV30");
     var preCustom = document.getElementById("alarmPreCustomV47");
     var mode = document.getElementById("alarmModeV30");
+    var sound = document.getElementById("alarmSoundV50");
+    var vibration = document.getElementById("alarmVibrationV50");
     var style = document.getElementById("alarmStyleV30");
 
     function clampPre(v) {
@@ -220,6 +268,8 @@ native_script = r'''
     if (preCustom) preCustom.value = String(clampPre(s.preMinutes));
     syncCustomPreBox();
     if (mode) mode.value = s.mode;
+    if (sound) sound.value = s.sound || "bip";
+    if (vibration) vibration.value = s.vibration || "double";
     if (style) style.value = s.style;
 
     function changed() {
@@ -232,6 +282,8 @@ native_script = r'''
         ns.preMinutes = pre.value === "custom" ? clampPre(preCustom ? preCustom.value : 10) : clampPre(pre.value);
       }
       if (mode) ns.mode = String(mode.value || "vibrate");
+      if (sound) ns.sound = String(sound.value || "bip");
+      if (vibration) ns.vibration = String(vibration.value || "double");
       if (style) ns.style = String(style.value || "detailed");
       saveAlarmSettings(ns);
       pushNativeAlarms(true);
@@ -249,12 +301,14 @@ native_script = r'''
       preCustom.onchange = changed;
     }
     if (mode) mode.onchange = changed;
+    if (sound) sound.onchange = changed;
+    if (vibration) vibration.onchange = changed;
     if (style) style.onchange = changed;
 
     var test = document.getElementById("testAlarmV30");
     if (test) test.onclick = function(){
       var ns = loadAlarmSettings();
-      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes});
+      var payload = JSON.stringify({city:"Kayseri", label:"Öğle", time:"12:37", type:"time", mode:ns.mode, style:ns.style, preMinutes:ns.preMinutes, sound:ns.sound||"bip", vibration:ns.vibration||"double"});
       try {
         if (window.AndroidNotify && typeof window.AndroidNotify.requestPermission === "function") window.AndroidNotify.requestPermission();
         if (window.AndroidNotify && typeof window.AndroidNotify.testAlarm === "function") window.AndroidNotify.testAlarm(payload);
@@ -287,6 +341,8 @@ native_script = r'''
           preMinutes: 0,
           mode: ns.mode,
           style: ns.style,
+          sound: ns.sound || "bip",
+          vibration: ns.vibration || "double",
           prayers: [{date: iso, key: "test", label: "Test", time: time}]
         };
 
@@ -360,7 +416,7 @@ native_script = r'''
         if (valid(rec[key])) prayers.push({ date: rec.date, key: key, label: label, time: fixText(rec[key]) });
       }
     }
-    return { city: "Kayseri", preMinutes: settings.preMinutes, mode: settings.mode, style: settings.style, prayers: prayers };
+    return { city: "Kayseri", preMinutes: settings.preMinutes, mode: settings.mode, style: settings.style, sound: settings.sound || "bip", vibration: settings.vibration || "double", prayers: prayers };
   }
 
   function pushNativeAlarms(force) {
@@ -1271,8 +1327,8 @@ android {
         applicationId 'com.turkhunmete.namazvakti'
         minSdk 23
         targetSdk 35
-        versionCode 49
-        versionName '1.0.49-live-countdown-fix'
+        versionCode 50
+        versionName '1.0.50-custom-sound-vibration'
     }
 }
 EOF
@@ -1486,6 +1542,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.net.Uri;
+import android.provider.Settings;
+import android.media.AudioAttributes;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -1516,40 +1575,79 @@ public class AlarmScheduler {
         if (json != null && json.trim().length() > 0) scheduleFromJson(context, json);
     }
 
-    public static void ensureChannels(Context context) {
+    public static long[] vibrationPattern(String vibration) {
+        vibration = vibration == null ? "double" : vibration;
+        if ("off".equals(vibration)) return new long[]{0};
+        if ("short".equals(vibration)) return new long[]{0, 180};
+        if ("long".equals(vibration)) return new long[]{0, 650};
+        return new long[]{0, 250, 120, 250};
+    }
+
+    private static String cleanPart(String s) {
+        if (s == null || s.length() == 0) return "default";
+        return s.replaceAll("[^a-zA-Z0-9_]", "_");
+    }
+
+    public static Uri soundUri(Context context, String sound) {
+        sound = sound == null ? "bip" : sound;
+        if ("none".equals(sound)) return null;
+        if ("default".equals(sound)) return Settings.System.DEFAULT_NOTIFICATION_URI;
+        return Uri.parse("android.resource://" + context.getPackageName() + "/" + R.raw.namaz_bip);
+    }
+
+    public static String channelForMode(String mode, String sound, String vibration) {
+        mode = mode == null ? "vibrate" : mode;
+        sound = sound == null ? "bip" : sound;
+        vibration = vibration == null ? "double" : vibration;
+        return "namaz_vakti_alarm_v50_" + cleanPart(mode) + "_" + cleanPart(sound) + "_" + cleanPart(vibration);
+    }
+
+    public static void ensureChannel(Context context, String mode, String sound, String vibration) {
         if (context == null || Build.VERSION.SDK_INT < 26) return;
+        mode = mode == null ? "vibrate" : mode;
+        sound = sound == null ? "bip" : sound;
+        vibration = vibration == null ? "double" : vibration;
+
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
 
-        NotificationChannel silent = new NotificationChannel(CHANNEL_ALARM_SILENT, "Namaz Alarmları - Sessiz", NotificationManager.IMPORTANCE_DEFAULT);
-        silent.setDescription("Sessiz vakit bildirimleri");
-        silent.enableVibration(false);
-        silent.setSound(null, null);
-        silent.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        int importance = "silent".equals(mode) ? NotificationManager.IMPORTANCE_DEFAULT : NotificationManager.IMPORTANCE_HIGH;
+        String label = "Namaz Alarmı";
+        if ("silent".equals(mode)) label += " - Sessiz";
+        else if ("vibrate".equals(mode)) label += " - Titreşim";
+        else label += " - Sesli";
 
-        NotificationChannel vibrate = new NotificationChannel(CHANNEL_ALARM_VIBRATE, "Namaz Alarmları - Titreşimli", NotificationManager.IMPORTANCE_HIGH);
-        vibrate.setDescription("Titreşimli vakit bildirimleri");
-        vibrate.enableVibration(true);
-        vibrate.setVibrationPattern(new long[]{0, 250, 120, 250});
-        vibrate.setSound(null, null);
-        vibrate.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        NotificationChannel ch = new NotificationChannel(channelForMode(mode, sound, vibration), label, importance);
+        ch.setDescription("Namaz vakti alarm bildirimleri");
+        ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
 
-        NotificationChannel sound = new NotificationChannel(CHANNEL_ALARM_SOUND, "Namaz Alarmları - Sesli", NotificationManager.IMPORTANCE_HIGH);
-        sound.setDescription("Sesli ve titreşimli vakit bildirimleri");
-        sound.enableVibration(true);
-        sound.setVibrationPattern(new long[]{0, 250, 120, 250});
-        sound.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        boolean allowVibration = !"silent".equals(mode) && !"off".equals(vibration);
+        ch.enableVibration(allowVibration);
+        if (allowVibration) ch.setVibrationPattern(vibrationPattern(vibration));
 
-        manager.createNotificationChannel(silent);
-        manager.createNotificationChannel(vibrate);
-        manager.createNotificationChannel(sound);
+        Uri uri = ("sound".equals(mode)) ? soundUri(context, sound) : null;
+        if (uri == null) {
+            ch.setSound(null, null);
+        } else {
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
+            ch.setSound(uri, attrs);
+        }
+
+        manager.createNotificationChannel(ch);
+    }
+
+    public static void ensureChannels(Context context) {
+        ensureChannel(context, "silent", "none", "off");
+        ensureChannel(context, "vibrate", "none", "double");
+        ensureChannel(context, "sound", "bip", "double");
+        ensureChannel(context, "sound", "default", "double");
     }
 
     public static String channelForMode(String mode) {
-        mode = mode == null ? "vibrate" : mode;
-        if ("silent".equals(mode)) return CHANNEL_ALARM_SILENT;
-        if ("sound".equals(mode)) return CHANNEL_ALARM_SOUND;
-        return CHANNEL_ALARM_VIBRATE;
+        return channelForMode(mode, "bip", "double");
     }
 
     public static void showTest(Context context, String json) {
@@ -1562,11 +1660,15 @@ public class AlarmScheduler {
             String time = TextFix.normalize(root.optString("time", "12:37"));
             String mode = root.optString("mode", "vibrate");
             String style = root.optString("style", "detailed");
+            String sound = root.optString("sound", "bip");
+            String vibration = root.optString("vibration", "double");
             String[] tb = compose(city, label, time, "time", 0, style);
             Intent i = new Intent(context, AlarmReceiver.class);
             i.putExtra("title", tb[0]);
             i.putExtra("body", tb[1]);
             i.putExtra("mode", mode);
+            i.putExtra("sound", sound);
+            i.putExtra("vibration", vibration);
             new AlarmReceiver().onReceive(context, i);
         } catch (Exception ignored) {}
     }
@@ -1578,6 +1680,8 @@ public class AlarmScheduler {
             int preMinutes = root.optInt("preMinutes", 10);
             String mode = root.optString("mode", "vibrate");
             String style = root.optString("style", "detailed");
+            String sound = root.optString("sound", "bip");
+            String vibration = root.optString("vibration", "double");
             String city = TextFix.normalize(root.optString("city", "Kayseri"));
             JSONArray prayers = root.optJSONArray("prayers");
             if (prayers == null) return;
@@ -1598,13 +1702,13 @@ public class AlarmScheduler {
 
                 if (at > now + 30000) {
                     String[] tb = compose(city, label, time, "time", preMinutes, style);
-                    scheduleOne(context, at, tb[0], tb[1], mode, date + key + "time");
+                    scheduleOne(context, at, tb[0], tb[1], mode, sound, vibration, date + key + "time");
                 }
 
                 long preAt = at - (preMinutes * 60L * 1000L);
                 if (preMinutes > 0 && preAt > now + 30000) {
                     String[] tb = compose(city, label, time, "pre", preMinutes, style);
-                    scheduleOne(context, preAt, tb[0], tb[1], mode, date + key + "pre");
+                    scheduleOne(context, preAt, tb[0], tb[1], mode, sound, vibration, date + key + "pre");
                 }
             }
         } catch (Exception ignored) {}
@@ -1668,11 +1772,13 @@ public class AlarmScheduler {
         } catch (Exception e) { return 0; }
     }
 
-    private static void scheduleOne(Context context, long triggerAtMillis, String title, String body, String mode, String key) {
+    private static void scheduleOne(Context context, long triggerAtMillis, String title, String body, String mode, String sound, String vibration, String key) {
         Intent intent = new Intent(context, AlarmReceiver.class);
         intent.putExtra("title", title);
         intent.putExtra("body", body);
         intent.putExtra("mode", mode == null ? "vibrate" : mode);
+        intent.putExtra("sound", sound == null ? "bip" : sound);
+        intent.putExtra("vibration", vibration == null ? "double" : vibration);
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
@@ -1740,8 +1846,13 @@ public class AlarmReceiver extends BroadcastReceiver {
         String title = TextFix.normalize(intent.getStringExtra("title"));
         String body = TextFix.normalize(intent.getStringExtra("body"));
         String mode = intent.getStringExtra("mode");
+        String sound = intent.getStringExtra("sound");
+        String vibration = intent.getStringExtra("vibration");
         if (mode == null || mode.length() == 0) mode = "vibrate";
+        if (sound == null || sound.length() == 0) sound = "bip";
+        if (vibration == null || vibration.length() == 0) vibration = "double";
         if (title.length() == 0) title = "Namaz Vakti";
+        AlarmScheduler.ensureChannel(context, mode, sound, vibration);
 
         Intent openIntent = new Intent(context, MainActivity.class);
         openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -1751,7 +1862,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
-            b = new Notification.Builder(context, AlarmScheduler.channelForMode(mode));
+            b = new Notification.Builder(context, AlarmScheduler.channelForMode(mode, sound, vibration));
         } else {
             b = new Notification.Builder(context);
             b.setPriority("silent".equals(mode) ? Notification.PRIORITY_DEFAULT : Notification.PRIORITY_HIGH);
@@ -1772,15 +1883,17 @@ public class AlarmReceiver extends BroadcastReceiver {
             if ("silent".equals(mode)) {
                 b.setSound(null);
                 b.setVibrate(new long[]{0});
-            } else if ("vibrate".equals(mode)) {
-                b.setSound(null);
-                b.setVibrate(new long[]{0, 250, 120, 250});
             } else {
-                b.setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
+                if ("sound".equals(mode)) {
+                    Uri uri = AlarmScheduler.soundUri(context, sound);
+                    if (uri == null) b.setSound(null);
+                    else b.setSound(uri);
+                } else {
+                    b.setSound(null);
+                }
+                if ("off".equals(vibration)) b.setVibrate(new long[]{0});
+                else b.setVibrate(AlarmScheduler.vibrationPattern(vibration));
             }
-        } else {
-            if ("silent".equals(mode)) b.setVibrate(new long[]{0});
-            else b.setVibrate(new long[]{0, 250, 120, 250});
         }
 
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -2352,83 +2465,5 @@ public class StatusService extends Service {
                 getSharedPreferences("status", MODE_PRIVATE).edit().putString("statusData", statusData).apply();
             }
 
-            if (!restoreOnly) {
-                String title = TextFix.normalize(intent.getStringExtra("title"));
-                String body = TextFix.normalize(intent.getStringExtra("body"));
-                if (title.length() > 0) currentTitle = title;
-                if (body.length() > 0) currentBody = body;
-                getSharedPreferences("status", MODE_PRIVATE).edit().putString("title", currentTitle).putString("body", currentBody).apply();
-            }
-        }
-
-        try { showForegroundNotification(); } catch (Exception ignored) {}
-        Watchdog.schedule(this);
-        if (handler != null && ticker != null) {
-            handler.removeCallbacks(ticker);
-            handler.postDelayed(ticker, 30000);
-        }
-        return START_STICKY;
-    }
-
-    private void createChannels() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            NotificationChannel statusChannel = new NotificationChannel(MainActivity.CHANNEL_STATUS, "Namaz Vakti Canlı Özet", NotificationManager.IMPORTANCE_DEFAULT);
-            statusChannel.setDescription("Dakikada bir güncellenen sessiz aktif vakit özeti");
-            statusChannel.enableVibration(false);
-            statusChannel.setSound(null, null);
-            statusChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-            if (manager != null) manager.createNotificationChannel(statusChannel);
-        }
-    }
-
-    private String compactText(String text) {
-        String clean = TextFix.normalize(text).replace("\\n", " ").replace("  ", " ").trim();
-        if (clean.length() <= 58) return clean;
-        return clean.substring(0, 55).trim() + "...";
-    }
-
-    private void showForegroundNotification() {
-        StatusCalculator.Result calc = StatusCalculator.calculate(statusData, currentTitle, currentBody);
-        String title = calc.title == null || calc.title.length() == 0 ? "Namaz Vakti" : calc.title;
-        String body = calc.body == null || calc.body.length() == 0 ? currentBody : calc.body;
-
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
-
-        Notification.Builder builder;
-        if (Build.VERSION.SDK_INT >= 26) builder = new Notification.Builder(this, MainActivity.CHANNEL_STATUS);
-        else { builder = new Notification.Builder(this); builder.setPriority(Notification.PRIORITY_DEFAULT); }
-
-        builder.setSmallIcon(R.drawable.ic_stat_moon)
-                .setContentTitle(title)
-                .setContentText(compactText(body))
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .setAutoCancel(false)
-                .setShowWhen(true)
-                .setOnlyAlertOnce(true)
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
-                .setColor(Color.rgb(230, 208, 100))
-                .setCategory(Notification.CATEGORY_STATUS);
-
-        if (Build.VERSION.SDK_INT < 26) { builder.setSound(null); builder.setVibrate(new long[]{0}); }
-        if (body.trim().length() > 0) builder.setStyle(new Notification.BigTextStyle().bigText(body));
-
-        Notification notification = builder.build();
-        notification.flags |= Notification.FLAG_ONGOING_EVENT;
-        notification.flags |= Notification.FLAG_NO_CLEAR;
-
-        if (Build.VERSION.SDK_INT >= 34) startForeground(STATUS_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-        else startForeground(STATUS_NOTIFICATION_ID, notification);
-    }
-
-    @Override public void onTaskRemoved(Intent rootIntent) { Watchdog.schedule(this); super.onTaskRemoved(rootIntent); }
-    @Override public void onDestroy() { Watchdog.schedule(this); if (handler != null && ticker != null) handler.removeCallbacks(ticker); super.onDestroy(); }
-    @Override public IBinder onBind(Intent intent) { return null; }
-}
-EOF
-
+            if (!r
+Büyük dosya için önizleme kısaltıldı
